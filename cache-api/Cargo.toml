@@ -2,8 +2,11 @@
 name = "rust-actions-cache-api"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "GitHub Actions Cache API client for actions written in Rust."
+license = "0BSD"
+repository = "https://github.com/jix/rust-actions/tree/main/cache-api"
+categories = ["api-bindings", "caching", "development-tools"]
+keywords = ["github", "actions", "gha", "cache"]
 
 [dependencies]
 bytes = "1.1.0"
