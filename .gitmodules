@@ -1,0 +1,3 @@
+[submodule "sccache"]
+	path = sccache
+	url = https://github.com/jix/sccache
