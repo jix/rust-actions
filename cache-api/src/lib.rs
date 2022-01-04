@@ -158,23 +158,25 @@ impl Cache {
 
         let ReserveResponse { cache_id } = response.error_for_status()?.json().await?;
 
-        let response = self
-            .api_request(
-                self.client
-                    .patch(format!("{}/caches/{}", self.endpoint, cache_id)),
-            )
-            .header(
-                reqwest::header::CONTENT_RANGE,
-                format!("bytes {}-{}/*", 0, data.len()),
-            )
-            .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
-            .body(data.clone())
-            .send()
-            .await?;
+        if !data.is_empty() {
+            let response = self
+                .api_request(
+                    self.client
+                        .patch(format!("{}/caches/{}", self.endpoint, cache_id)),
+                )
+                .header(
+                    reqwest::header::CONTENT_RANGE,
+                    format!("bytes {}-{}/*", 0, data.len() - 1),
+                )
+                .header(reqwest::header::CONTENT_TYPE, "application/octet-stream")
+                .body(data.clone())
+                .send()
+                .await?;
 
-        tracing::debug!(response_headers = ?response.headers());
+            tracing::debug!(response_headers = ?response.headers());
 
-        response.error_for_status()?;
+            response.error_for_status()?;
+        }
 
         #[derive(Serialize)]
         struct RequestBody<'a> {
