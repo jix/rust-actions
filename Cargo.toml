@@ -1,2 +1,2 @@
 [workspace]
-members = ["cache-api"]
+members = ["cache-api", "actions"]
