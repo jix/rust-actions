@@ -14,7 +14,7 @@ rm -rf "$out"
 mkdir -p "$out/bin"
 
 (cd sccache; cargo build --target=x86_64-unknown-linux-musl --release \
-    	--no-default-features --features gha,openssl/vendored) &> /dev/null
+    --no-default-features --features gha,openssl/vendored)
 cargo build --target=x86_64-unknown-linux-musl --release
 
 cp sccache/target/x86_64-unknown-linux-musl/release/sccache \
