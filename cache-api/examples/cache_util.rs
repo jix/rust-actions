@@ -12,7 +12,8 @@ async fn main() -> color_eyre::eyre::Result<()> {
 
     println!("go");
 
-    let cache = rust_actions_cache_api::Cache::new()?;
+    let cache =
+        rust_actions_cache_api::Cache::new("jix/rust-actions/cache-api/examples/cache_util.rs")?;
 
     let keys = std::env::args().nth(1).unwrap();
 
