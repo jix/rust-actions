@@ -7,7 +7,7 @@
 //! [source code]:https://github.com/actions/toolkit/tree/main/packages/cache
 //! [pinning specific versions]:https://docs.github.com/en/actions/learn-github-actions/finding-and-customizing-actions#using-shas
 use bytes::Bytes;
-use reqwest::{Client, RequestBuilder};
+use reqwest::{Client, RequestBuilder, Response};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -15,12 +15,37 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 #[non_exhaustive]
 pub enum Error {
+    /// Error making a HTTP request.
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
+    /// Rate-limited HTTP request.
+    #[error("server rate limited the request, asking to wait {retry_after} seconds")]
+    RateLimit {
+        /// Time to wait until making a retry or follow-up request.
+        retry_after: u64,
+        /// Error included in the rate-limit response.
+        #[source]
+        source: reqwest::Error,
+    },
+    /// Missing `ACTIONS_RUNTIME_TOKEN` environment variable.
     #[error("did not find a runtime token in the ACTIONS_RUNTIME_TOKEN environment variable")]
     NoRuntimeToken,
+    /// Missing `ACTIONS_CACHE_URL` environment variable.
     #[error("did not find the endpoint URL in the ACTIONS_CACHE_URL environment variable")]
     NoEndpointUrl,
+}
+
+impl Error {
+    /// Returns the requested time to wait until retrying the rate limited request.
+    ///
+    /// If the cause for failure was not rate limiting, that cause is returned instead.
+    pub fn retry_after(&self) -> Option<u64> {
+        if let Self::RateLimit { retry_after, .. } = *self {
+            Some(retry_after)
+        } else {
+            None
+        }
+    }
 }
 
 /// Result type used for fallible operations in this crate.
@@ -48,7 +73,9 @@ pub struct Cache {
 
 impl Cache {
     /// Creates a new client instance.
-    pub fn new() -> Result<Self> {
+    ///
+    /// The passed `user_agent` should identify the program using this library.
+    pub fn new(user_agent: &str) -> Result<Self> {
         let token = std::env::var("ACTIONS_RUNTIME_TOKEN").map_err(|_| Error::NoRuntimeToken)?;
 
         let endpoint = format!(
@@ -58,7 +85,7 @@ impl Cache {
                 .trim_end_matches('/')
         );
 
-        let client = Client::builder().build()?;
+        let client = Client::builder().user_agent(user_agent).build()?;
 
         Ok(Self {
             client,
@@ -108,7 +135,7 @@ impl Cache {
         if response.status() == reqwest::StatusCode::NO_CONTENT {
             Ok(None)
         } else {
-            let response: GetResponse = response.error_for_status()?.json().await?;
+            let response: GetResponse = error_for_response(response)?.json().await?;
             Ok(Some((response.hit, response.location)))
         }
     }
@@ -156,7 +183,7 @@ impl Cache {
 
         tracing::debug!(response_headers = ?response.headers());
 
-        let ReserveResponse { cache_id } = response.error_for_status()?.json().await?;
+        let ReserveResponse { cache_id } = error_for_response(response)?.json().await?;
 
         if !data.is_empty() {
             let response = self
@@ -175,7 +202,7 @@ impl Cache {
 
             tracing::debug!(response_headers = ?response.headers());
 
-            response.error_for_status()?;
+            error_for_response(response)?;
         }
 
         #[derive(Serialize)]
@@ -200,7 +227,23 @@ impl Cache {
 
         tracing::debug!(response_headers = ?response.headers());
 
-        response.error_for_status()?;
+        error_for_response(response)?;
         Ok(())
     }
+}
+
+fn error_for_response(response: Response) -> Result<Response> {
+    if response.status().is_client_error() || response.status().is_server_error() {
+        if let Some(retry_after) = response
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|v| v.to_str().ok()?.parse().ok())
+        {
+            return Err(Error::RateLimit {
+                retry_after,
+                source: response.error_for_status().unwrap_err(),
+            });
+        }
+    }
+    response.error_for_status().map_err(Into::into)
 }
