@@ -1,0 +1,19 @@
+name: 'Prints "Hello, world!"'
+description: "just to test things"
+runs:
+  using: "node12"
+  main: "main.js"
+inputs:
+  optional:
+    description: "optional input"
+    required: false
+  toolchain:
+    description: "toolchain"
+    required: false
+  something:
+    description: "something"
+    required: false
+  action-contexts:
+    description: "helper input to forward the github and matrix contexts via its default value"
+    required: false
+    default: '{ "github": ${{ toJSON(github) }}, "matrix": ${{ toJSON(matrix) }} }'
